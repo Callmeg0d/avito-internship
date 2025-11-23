@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_NAME}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    env_file:
+      - .env
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_NAME: ${POSTGRES_NAME}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      APP_PORT: ${APP_PORT:-8080}
+      APP_HOST: ${APP_HOST:-0.0.0.0}
+    command: sh -c "alembic upgrade head && python -c 'import asyncio; from test_data import create_test_data; asyncio.run(create_test_data())' || true && uvicorn app.main:app --host ${APP_HOST:-0.0.0.0} --port ${APP_PORT:-8080}"
+
+volumes:
+  postgres_data:
+
